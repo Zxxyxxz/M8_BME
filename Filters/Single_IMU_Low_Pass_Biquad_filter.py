@@ -13,29 +13,16 @@ manager = SensorManager(['890E'])
 # Sampling frequency of the sensor "890E"
 fs = 101
 
-#Cut off freqs
-fc_1 = 15
-fc_2 = 5
-fc_3 = 1
-fc_4 = 0.2
+# Cut off frequency
+fc = 1  # 1Hz
 
-# Normalize the freuqency
-# relative to the Nyquist frequency, which is half of the sampling frequency
-w_1= (2*fc_1 / fs)
-w_2= (2*fc_2 / fs)
-w_3= (2*fc_3 / fs)
-w_4= (2*fc_4 / fs)
+# Normalize the frequency relative to the Nyquist frequency
+w = (2 * fc / fs)
 
-b, a = signal.butter(2, w_1, 'low')
-c, d = signal.butter(2, w_2, 'low')
-e, f = signal.butter(2, w_3, 'low')
-g, h = signal.butter(2, w_4, 'low')
+# Create the numerator and denominator coefficients of the biquad filter
+b, a = signal.butter(2, w, 'low')
 
-
-# Create deque objects to store the sensor measurements and timestamps with a maximum length of 500
-# deque supports setting a maximum length for the queue. When the queue reaches the maximum length, adding
-# new elements to one end will automatically remove elements from the other end.
-
+# Create deque objects to store the sensor measurements with a maximum length of 500
 sensor_890E_acc_x = deque(maxlen=500)
 sensor_890E_acc_y = deque(maxlen=500)
 sensor_890E_acc_z = deque(maxlen=500)
@@ -44,6 +31,16 @@ sensor_890E_acc_x_filtered = deque(maxlen=500)
 sensor_890E_acc_y_filtered = deque(maxlen=500)
 sensor_890E_acc_z_filtered = deque(maxlen=500)
 
+# Initialize previous input and output values for biquad filter
+x1, x2, y1, y2 = 0, 0, 0, 0
+
+# Biquad filter function
+def biquad_filter(x0, b, a):
+    global x1, x2, y1, y2  # Declare the variables as global
+    y0 = x0 * b[0] + x1 * b[1] + x2 * b[2] - y1 * a[1] - y2 * a[2]
+    x2, x1 = x1, x0
+    y2, y1 = y1, y0
+    return y0
 
 # Animation update function
 def animate(i):
@@ -54,22 +51,25 @@ def animate(i):
             continue
         if len(data) > 0:  # Ensure data has at least 6 values
             if sensor == '890E':
-                # print(sensor, data)
-                # print(data[0])
-
-                # Extract accelerometer and gyroscope values from each chunk
+                # Extract accelerometer values from each chunk
                 for chunk in data:
                     acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z = chunk
                     sensor_890E_acc_x.append(acc_x)  # Store accelerometer x
                     sensor_890E_acc_y.append(acc_y)  # Store accelerometer y
                     sensor_890E_acc_z.append(acc_z)  # Store accelerometer z
 
-                # using 1Hz fc
                 # Apply filtering to accelerometer values
-                sensor_890E_acc_x_filtered = signal.lfilter(e, f, sensor_890E_acc_x)
-                sensor_890E_acc_y_filtered= signal.lfilter(e, f, sensor_890E_acc_y)
-                sensor_890E_acc_z_filtered = signal.lfilter(e, f, sensor_890E_acc_z)
+                for x in sensor_890E_acc_x:
+                    y = biquad_filter(x, b, a)
+                    sensor_890E_acc_x_filtered.append(y)
 
+                for x in sensor_890E_acc_y:
+                    y = biquad_filter(x, b, a)
+                    sensor_890E_acc_y_filtered.append(y)
+
+                for x in sensor_890E_acc_z:
+                    y = biquad_filter(x, b, a)
+                    sensor_890E_acc_z_filtered.append(y)
 
     ax1.clear()
     if sensor_890E_acc_x and sensor_890E_acc_y and sensor_890E_acc_z:
